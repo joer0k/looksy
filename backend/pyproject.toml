@@ -10,6 +10,7 @@ dependencies = [
     "boto3>=1.43.69",
     "email-validator>=2.3.0",
     "fastapi[standard]>=0.141.1",
+    "greenlet>=3.5.5",
     "httpx>=0.28.1",
     "openai>=3.0.0",
     "pwdlib[argon2]>=0.3.1",
