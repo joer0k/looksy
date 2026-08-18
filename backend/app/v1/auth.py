@@ -1,12 +1,11 @@
-from http.client import HTTPException
 
-from fastapi import APIRouter, status, Depends
+from fastapi import APIRouter, status, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User
-from app.schemas.auth import UserResponse, UserRegister
-from app.core.security import hash_password
+from app.schemas.auth import UserResponse, UserRegister, TokenResponse, UserLogin
+from app.core.security import hash_password, verify_password, create_access_token
 from app.core.database import get_db
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -33,3 +32,23 @@ async def register_user(data: UserRegister, db: AsyncSession = Depends(get_db)) 
     await db.refresh(user)
 
     return user
+
+@router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
+async def login_user(data: UserLogin, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+    user = await db.scalar(
+        select(User).where(User.email == data.email)
+    )
+    if user is None or not verify_password(data.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Incorrect email or password'
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='User account is inactive'
+        )
+    access_token = create_access_token(str(user.id))
+
+    return TokenResponse(access_token=access_token, token_type='bearer')
