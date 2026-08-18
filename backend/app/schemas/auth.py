@@ -1,6 +1,7 @@
+from datetime import date, datetime
 
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
-from datetime import date
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, ConfigDict
+
 
 class UserRegister(BaseModel):
     email: EmailStr
@@ -11,7 +12,7 @@ class UserRegister(BaseModel):
 
     @field_validator('password')
     @classmethod
-    def password_complexity(self, password):
+    def password_complexity(cls, password: str) -> str:
         if not any(elem.isupper() for elem in password):
             raise ValueError('Password must contain at least 1 uppercase letter')
         if not any(elem.isdigit() for elem in password):
@@ -19,17 +20,26 @@ class UserRegister(BaseModel):
         return password
 
     @model_validator(mode='after')
-    def passwords_match(self, v, values):
-        if 'password' in values and v != values['password']:
+    def passwords_match(self):
+        if self.password != self.confirm_password:
             raise ValueError('Passwords do not match')
-        return v
-
+        return self
 
     @field_validator('birth_date')
     @classmethod
-    def valid_age(self, v):
+    def valid_age(cls, v: date) -> bool:
         today = date.today()
         age = today.year - v.year - ((today.month, today.day) < (v.month, v.day))
         if age < 14:
             raise ValueError('Must be at least 14 years old')
         return v
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: EmailStr
+    birth_date: date
+    is_active: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

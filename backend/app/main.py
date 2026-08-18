@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from .core.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+
+from .v1 import auth
+
 origins = [
     "http://localhost:3000",
     "http://localhost:8000",
@@ -17,6 +20,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(auth.router)
 @app.get('/')
 async def root():
     return {'message': 'Hello from backend!'}
