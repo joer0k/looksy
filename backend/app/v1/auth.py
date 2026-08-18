@@ -7,6 +7,7 @@ from app.models import User
 from app.schemas.auth import UserResponse, UserRegister, TokenResponse, UserLogin
 from app.core.security import hash_password, verify_password, create_access_token
 from app.core.database import get_db
+from app.core.dependencies import get_current_active_user
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=UserResponse,status_code=status.HTTP_201_CREATED)
@@ -52,3 +53,8 @@ async def login_user(data: UserLogin, db: AsyncSession = Depends(get_db)) -> Tok
     access_token = create_access_token(str(user.id))
 
     return TokenResponse(access_token=access_token, token_type='bearer')
+
+@router.get("/me", response_model=UserResponse, status_code=status.HTTP_200_OK)
+async def get_me(current_user: User = Depends(get_current_active_user),
+                 ) -> User:
+    return current_user
