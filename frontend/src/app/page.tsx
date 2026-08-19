@@ -30,6 +30,8 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const [isCreatingItem, setIsCreatingItem] = useState(false);
+  const [editingItem, setEditingItem] = useState<ClothingItem | null>(null);
+  const [isUpdatingItem, setIsUpdatingItem] = useState(false);
   const [itemError, setItemError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -74,6 +76,24 @@ export default function Home() {
     setWardrobeItems([]);
   }
 
+  function openAddItemForm() {
+    setItemError(null);
+    setEditingItem(null);
+    setIsAddItemOpen(true);
+  }
+
+  function openEditItemForm(item: ClothingItem) {
+    setItemError(null);
+    setIsAddItemOpen(false);
+    setEditingItem(item);
+  }
+
+  function closeItemForm() {
+    setItemError(null);
+    setIsAddItemOpen(false);
+    setEditingItem(null);
+  }
+
   async function createItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setItemError(null);
@@ -111,13 +131,83 @@ export default function Home() {
 
       setWardrobeItems((items) => [body, ...items]);
       form.reset();
-      setIsAddItemOpen(false);
+      closeItemForm();
     } catch (caughtError) {
       setItemError(
         caughtError instanceof Error ? caughtError.message : "Не удалось связаться с сервером.",
       );
     } finally {
       setIsCreatingItem(false);
+    }
+  }
+
+  async function updateItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingItem) return;
+
+    setItemError(null);
+    const token = localStorage.getItem("looksy_access_token");
+    if (!token) return;
+
+    const formData = new FormData(event.currentTarget);
+    setIsUpdatingItem(true);
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/items/${editingItem.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: formData.get("name"),
+          category: formData.get("category"),
+          color: formData.get("color"),
+          season: formData.get("season"),
+          image_url: formData.get("image_url") || null,
+        }),
+      });
+
+      const body = (await response.json().catch(() => ({}))) as ClothingItem & {
+        detail?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(body.detail ?? "Не удалось обновить вещь.");
+      }
+
+      setWardrobeItems((items) => items.map((item) => (item.id === body.id ? body : item)));
+      closeItemForm();
+    } catch (caughtError) {
+      setItemError(
+        caughtError instanceof Error ? caughtError.message : "Не удалось связаться с сервером.",
+      );
+    } finally {
+      setIsUpdatingItem(false);
+    }
+  }
+
+  async function deleteItem(item: ClothingItem) {
+    if (!window.confirm(`Delete “${item.name}” from your wardrobe?`)) return;
+
+    const token = localStorage.getItem("looksy_access_token");
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/items/${item.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error("Не удалось удалить вещь.");
+      }
+
+      setWardrobeItems((items) => items.filter((currentItem) => currentItem.id !== item.id));
+    } catch (caughtError) {
+      window.alert(
+        caughtError instanceof Error ? caughtError.message : "Не удалось связаться с сервером.",
+      );
     }
   }
 
@@ -227,7 +317,7 @@ export default function Home() {
               <h1 className="mt-2 text-4xl font-semibold tracking-tight">Good morning, {firstName}.</h1>
               <p className="mt-2 text-[#202833]/65">Let&apos;s make getting dressed feel effortless.</p>
             </div>
-            <button type="button" onClick={() => setIsAddItemOpen(true)} className="rounded-xl bg-[#EF6A4C] px-5 py-3 font-semibold text-[#202833] shadow-lg shadow-[#EF6A4C]/20 transition hover:-translate-y-0.5">+ Add an item</button>
+            <button type="button" onClick={openAddItemForm} className="rounded-xl bg-[#EF6A4C] px-5 py-3 font-semibold text-[#202833] shadow-lg shadow-[#EF6A4C]/20 transition hover:-translate-y-0.5">+ Add an item</button>
           </header>
 
           <section className="mt-10 grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
@@ -270,7 +360,7 @@ export default function Home() {
               <div className="mt-5 rounded-2xl border border-dashed border-[#845D3E]/25 bg-[#FFFDF4] px-6 py-10 text-center">
                 <p className="font-semibold">Your wardrobe is still empty.</p>
                 <p className="mt-2 text-sm text-[#202833]/60">Add your first item and Looksy will start building your rotation.</p>
-                <button type="button" onClick={() => setIsAddItemOpen(true)} className="mt-5 font-semibold text-[#0F3C65] underline decoration-[#EF6A4C] decoration-2 underline-offset-4">Add my first item</button>
+                <button type="button" onClick={openAddItemForm} className="mt-5 font-semibold text-[#0F3C65] underline decoration-[#EF6A4C] decoration-2 underline-offset-4">Add my first item</button>
               </div>
             ) : (
               <div className="mt-5 grid gap-4 sm:grid-cols-3">
@@ -283,6 +373,10 @@ export default function Home() {
                       <div className="grid h-36 place-items-center rounded-xl text-lg font-bold" style={{ backgroundColor, color: textColor }}>{getInitials(item.name)}</div>
                       <p className="mt-4 truncate font-semibold">{item.name}</p>
                       <p className="mt-1 text-sm text-[#202833]/55">{item.category} · {item.color}</p>
+                      <div className="mt-4 flex gap-3 border-t border-[#845D3E]/10 pt-3 text-sm font-semibold">
+                        <button type="button" onClick={() => openEditItemForm(item)} className="text-[#0F3C65] underline decoration-[#EF6A4C] decoration-2 underline-offset-4">Edit</button>
+                        <button type="button" onClick={() => void deleteItem(item)} className="text-[#845D3E] underline decoration-[#845D3E]/40 underline-offset-4">Delete</button>
+                      </div>
                     </article>
                   );
                 })}
@@ -292,48 +386,48 @@ export default function Home() {
         </section>
       </div>
 
-      {isAddItemOpen && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-[#202833]/55 p-4 backdrop-blur-sm">
+      {(isAddItemOpen || editingItem) && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#202833]/55 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="item-form-title">
           <div className="w-full max-w-lg rounded-[1.75rem] bg-[#FFFAE9] p-6 shadow-2xl sm:p-8">
             <div className="flex items-start justify-between gap-6">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#8A6674]">Your wardrobe</p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight">Add a new piece</h2>
+                <h2 id="item-form-title" className="mt-2 text-2xl font-semibold tracking-tight">{editingItem ? "Edit this piece" : "Add a new piece"}</h2>
               </div>
-              <button type="button" onClick={() => setIsAddItemOpen(false)} className="grid h-9 w-9 place-items-center rounded-full bg-[#EAE0C8] text-lg transition hover:bg-[#FFF2BA]" aria-label="Close">×</button>
+              <button type="button" onClick={closeItemForm} className="grid h-9 w-9 place-items-center rounded-full bg-[#EAE0C8] text-lg transition hover:bg-[#FFF2BA]" aria-label="Close">×</button>
             </div>
 
-            <form className="mt-7 grid gap-4 sm:grid-cols-2" onSubmit={createItem}>
+            <form key={editingItem?.id ?? "new"} className="mt-7 grid gap-4 sm:grid-cols-2" onSubmit={editingItem ? updateItem : createItem}>
               <label className="block sm:col-span-2">
                 <span className="mb-2 block text-sm font-semibold">Name</span>
-                <input name="name" required maxLength={120} placeholder="e.g. White shirt" className="w-full rounded-xl border border-[#EAE0C8] bg-[#FFFDF4] px-4 py-3 outline-none transition focus:border-[#0F3C65] focus:ring-4 focus:ring-[#0F3C65]/10" />
+                <input name="name" required maxLength={120} defaultValue={editingItem?.name ?? ""} placeholder="e.g. White shirt" className="w-full rounded-xl border border-[#EAE0C8] bg-[#FFFDF4] px-4 py-3 outline-none transition focus:border-[#0F3C65] focus:ring-4 focus:ring-[#0F3C65]/10" />
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold">Category</span>
-                <select name="category" required defaultValue="" className="w-full rounded-xl border border-[#EAE0C8] bg-[#FFFDF4] px-4 py-3 outline-none transition focus:border-[#0F3C65] focus:ring-4 focus:ring-[#0F3C65]/10">
+                <select name="category" required defaultValue={editingItem?.category ?? ""} className="w-full rounded-xl border border-[#EAE0C8] bg-[#FFFDF4] px-4 py-3 outline-none transition focus:border-[#0F3C65] focus:ring-4 focus:ring-[#0F3C65]/10">
                   <option value="" disabled>Choose a category</option>
                   <option>Tops</option><option>Bottoms</option><option>Outerwear</option><option>Shoes</option><option>Accessories</option>
                 </select>
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold">Colour</span>
-                <input name="color" required maxLength={50} placeholder="e.g. Navy blue" className="w-full rounded-xl border border-[#EAE0C8] bg-[#FFFDF4] px-4 py-3 outline-none transition focus:border-[#0F3C65] focus:ring-4 focus:ring-[#0F3C65]/10" />
+                <input name="color" required maxLength={50} defaultValue={editingItem?.color ?? ""} placeholder="e.g. Navy blue" className="w-full rounded-xl border border-[#EAE0C8] bg-[#FFFDF4] px-4 py-3 outline-none transition focus:border-[#0F3C65] focus:ring-4 focus:ring-[#0F3C65]/10" />
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold">Season</span>
-                <select name="season" required defaultValue="" className="w-full rounded-xl border border-[#EAE0C8] bg-[#FFFDF4] px-4 py-3 outline-none transition focus:border-[#0F3C65] focus:ring-4 focus:ring-[#0F3C65]/10">
+                <select name="season" required defaultValue={editingItem?.season ?? ""} className="w-full rounded-xl border border-[#EAE0C8] bg-[#FFFDF4] px-4 py-3 outline-none transition focus:border-[#0F3C65] focus:ring-4 focus:ring-[#0F3C65]/10">
                   <option value="" disabled>Choose a season</option>
                   <option>Spring</option><option>Summer</option><option>Autumn</option><option>Winter</option><option>All season</option>
                 </select>
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold">Image URL <span className="font-normal text-[#202833]/50">(optional)</span></span>
-                <input name="image_url" type="url" placeholder="https://..." className="w-full rounded-xl border border-[#EAE0C8] bg-[#FFFDF4] px-4 py-3 outline-none transition focus:border-[#0F3C65] focus:ring-4 focus:ring-[#0F3C65]/10" />
+                <input name="image_url" type="url" defaultValue={editingItem?.image_url ?? ""} placeholder="https://..." className="w-full rounded-xl border border-[#EAE0C8] bg-[#FFFDF4] px-4 py-3 outline-none transition focus:border-[#0F3C65] focus:ring-4 focus:ring-[#0F3C65]/10" />
               </label>
               {itemError && <p role="alert" className="sm:col-span-2 rounded-xl bg-[#FFF2BA] px-4 py-3 text-sm text-[#845D3E]">{itemError}</p>}
               <div className="mt-2 flex justify-end gap-3 sm:col-span-2">
-                <button type="button" onClick={() => setIsAddItemOpen(false)} className="rounded-xl px-4 py-3 font-semibold text-[#202833]/70">Cancel</button>
-                <button type="submit" disabled={isCreatingItem} className="rounded-xl bg-[#EF6A4C] px-5 py-3 font-semibold text-[#202833] shadow-lg shadow-[#EF6A4C]/20 disabled:cursor-not-allowed disabled:opacity-60">{isCreatingItem ? "Adding..." : "Add to wardrobe"}</button>
+                <button type="button" onClick={closeItemForm} className="rounded-xl px-4 py-3 font-semibold text-[#202833]/70">Cancel</button>
+                <button type="submit" disabled={isCreatingItem || isUpdatingItem} className="rounded-xl bg-[#EF6A4C] px-5 py-3 font-semibold text-[#202833] shadow-lg shadow-[#EF6A4C]/20 disabled:cursor-not-allowed disabled:opacity-60">{editingItem ? (isUpdatingItem ? "Saving..." : "Save changes") : (isCreatingItem ? "Adding..." : "Add to wardrobe")}</button>
               </div>
             </form>
           </div>
