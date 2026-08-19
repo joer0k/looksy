@@ -4,7 +4,7 @@ from .core.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
-from .v1 import auth
+from .v1 import auth, clothing_items
 
 origins = [
     "http://localhost:3000",
@@ -21,6 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth.router)
+app.include_router(clothing_items.router)
 @app.get('/')
 async def root():
     return {'message': 'Hello from backend!'}
