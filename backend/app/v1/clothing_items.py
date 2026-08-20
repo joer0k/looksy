@@ -1,5 +1,6 @@
+import asyncio
 
-from fastapi import APIRouter, status, Depends, HTTPException
+from fastapi import APIRouter, status, Depends, HTTPException, File, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,8 +8,19 @@ from app.core.database import get_db
 from app.models import ClothingItem, User
 from app.core.dependencies import get_current_active_user
 from app.schemas.clothing_item import ClothingItemResponse, ClothingItemCreate, ClothingItemUpdate
+from app.services.storage import upload_image
+
+
 router = APIRouter(prefix='/items', tags=['items'])
 
+
+ALLOWED_IMAGE_TYPES = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+]
+
+MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB
 @router.post("/",response_model=ClothingItemResponse, status_code=status.HTTP_201_CREATED)
 async def create_item(data: ClothingItemCreate,
                       current_user: User = Depends(get_current_active_user),
@@ -107,3 +119,44 @@ async def update_item(item_id: int,
     await db.refresh(item)
 
     return item
+
+
+@router.post("/{item_id}",response_model=ClothingItemResponse, status_code=status.HTTP_202_ACCEPTED)
+async def upload_item_image(item_id: int,
+                            file: UploadFile = File(...),
+                            current_user: User = Depends(get_current_active_user),
+                            db: AsyncSession = Depends(get_db),
+                            ) -> ClothingItem:
+    item = await db.scalar(
+        select(ClothingItem).where(
+            ClothingItem.id == item_id,
+            ClothingItem.user_id == current_user.id,
+        )
+    )
+
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Item not found",)
+
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                            detail="Unsupported media type",)
+
+    content = await file.read()
+
+    if len(content) > MAX_IMAGE_SIZE:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            detail="Image too large",)
+
+    object_key = await asyncio.to_thread(upload_image,
+                                         content,
+                                         file.filename or "image",
+                                         file.content_type)
+
+    item.image_url = object_key
+
+    await db.commit()
+    await db.refresh(item)
+
+    return item
+
