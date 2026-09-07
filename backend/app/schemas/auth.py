@@ -1,6 +1,8 @@
 from datetime import date, datetime
+from pydoc import describe
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, ConfigDict
+from sqlalchemy.sql.base import _DefaultDescriptionTuple
 
 
 class UserRegister(BaseModel):

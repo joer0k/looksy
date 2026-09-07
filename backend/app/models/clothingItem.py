@@ -9,7 +9,7 @@ class ClothingItem(Base):
     category: Mapped[str]
     color: Mapped[str]
     season: Mapped[str]
-    image_url: Mapped[str | None] = mapped_column(nullable=True)
+    image_key: Mapped[str | None] = mapped_column(nullable=True)
     user_id: Mapped[int] = mapped_column(
         ForeignKey('users.id', ondelete='CASCADE'),
         index=True,

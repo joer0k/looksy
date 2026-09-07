@@ -33,6 +33,15 @@ export default function Home() {
   const [editingItem, setEditingItem] = useState<ClothingItem | null>(null);
   const [isUpdatingItem, setIsUpdatingItem] = useState(false);
   const [itemError, setItemError] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!photo) { setPreview(null); return; }
+    const url = URL.createObjectURL(photo);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photo]);
 
   useEffect(() => {
     const token = localStorage.getItem("looksy_access_token");
@@ -77,21 +86,47 @@ export default function Home() {
   }
 
   function openAddItemForm() {
+    setPhoto(null);
     setItemError(null);
     setEditingItem(null);
     setIsAddItemOpen(true);
   }
 
   function openEditItemForm(item: ClothingItem) {
+    setPhoto(null);
     setItemError(null);
     setIsAddItemOpen(false);
     setEditingItem(item);
   }
 
   function closeItemForm() {
+    if (isCreatingItem || isUpdatingItem) return;
+    setPhoto(null);
     setItemError(null);
     setIsAddItemOpen(false);
     setEditingItem(null);
+  }
+
+  async function savePhoto(item: ClothingItem, token: string) {
+    if (!photo) return true;
+    const data = new FormData();
+    data.append("file", photo);
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/items/${item.id}/image`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: data,
+      });
+      if (!response.ok) throw new Error("Photo upload failed");
+      const updated = await response.json() as ClothingItem;
+      setWardrobeItems(items => items.map(value => value.id === updated.id ? updated : value));
+      return true;
+    } catch {
+      setEditingItem(item);
+      setIsAddItemOpen(false);
+      setItemError("Вещь сохранена, но фото загрузить не удалось. Нажмите Save changes для повторной попытки.");
+      return false;
+    }
   }
 
   async function createItem(event: FormEvent<HTMLFormElement>) {
@@ -117,7 +152,6 @@ export default function Home() {
           category: formData.get("category"),
           color: formData.get("color"),
           season: formData.get("season"),
-          image_url: formData.get("image_url") || null,
         }),
       });
 
@@ -130,8 +164,10 @@ export default function Home() {
       }
 
       setWardrobeItems((items) => [body, ...items]);
+      if (!await savePhoto(body, token)) return;
       form.reset();
-      closeItemForm();
+      setPhoto(null);
+      setIsAddItemOpen(false);
     } catch (caughtError) {
       setItemError(
         caughtError instanceof Error ? caughtError.message : "Не удалось связаться с сервером.",
@@ -164,7 +200,6 @@ export default function Home() {
           category: formData.get("category"),
           color: formData.get("color"),
           season: formData.get("season"),
-          image_url: formData.get("image_url") || null,
         }),
       });
 
@@ -177,7 +212,9 @@ export default function Home() {
       }
 
       setWardrobeItems((items) => items.map((item) => (item.id === body.id ? body : item)));
-      closeItemForm();
+      if (!await savePhoto(body, token)) return;
+      setPhoto(null);
+      setEditingItem(null);
     } catch (caughtError) {
       setItemError(
         caughtError instanceof Error ? caughtError.message : "Не удалось связаться с сервером.",
@@ -370,7 +407,10 @@ export default function Home() {
 
                   return (
                     <article key={item.id} className="group rounded-2xl border border-[#845D3E]/10 bg-[#FFFDF4] p-4 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-[#202833]/8">
-                      <div className="grid h-36 place-items-center rounded-xl text-lg font-bold" style={{ backgroundColor, color: textColor }}>{getInitials(item.name)}</div>
+                      <div className="relative grid h-48 place-items-center overflow-hidden rounded-xl text-lg font-bold" style={{ backgroundColor, color: textColor }}>
+                        {getInitials(item.name)}
+                        {item.image_url && <img key={item.image_url} src={item.image_url} alt={item.name} loading="lazy" referrerPolicy="no-referrer" onError={event => { event.currentTarget.style.display = "none"; }} className="absolute inset-0 h-full w-full bg-[#F5EFC6] object-contain" />}
+                      </div>
                       <p className="mt-4 truncate font-semibold">{item.name}</p>
                       <p className="mt-1 text-sm text-[#202833]/55">{item.category} · {item.color}</p>
                       <div className="mt-4 flex gap-3 border-t border-[#845D3E]/10 pt-3 text-sm font-semibold">
@@ -421,8 +461,21 @@ export default function Home() {
                 </select>
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-semibold">Image URL <span className="font-normal text-[#202833]/50">(optional)</span></span>
-                <input name="image_url" type="url" defaultValue={editingItem?.image_url ?? ""} placeholder="https://..." className="w-full rounded-xl border border-[#EAE0C8] bg-[#FFFDF4] px-4 py-3 outline-none transition focus:border-[#0F3C65] focus:ring-4 focus:ring-[#0F3C65]/10" />
+                <span className="mb-2 block text-sm font-semibold">Photo <span className="font-normal text-[#202833]/50">(optional)</span></span>
+                <input name="photo" type="file" accept="image/jpeg,image/png,image/webp" disabled={isCreatingItem || isUpdatingItem} onChange={event => {
+                  const file = event.target.files?.[0];
+                  setItemError(null);
+                  if (file && (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024 || file.size === 0)) {
+                    setItemError("Выберите JPEG, PNG или WebP размером до 5 МБ.");
+                    event.target.value = "";
+                    setPhoto(null);
+                    return;
+                  }
+                  setPhoto(file ?? null);
+                }} className="w-full rounded-xl border border-[#EAE0C8] bg-[#FFFDF4] px-3 py-3 text-sm" />
+                <span className="mt-2 block text-xs text-[#202833]/60">JPEG, PNG, WebP · up to 5 MB</span>
+                {photo && <span className="mt-2 block break-all text-xs">Selected: {photo.name}</span>}
+                {(preview || editingItem?.image_url) && <img src={preview || editingItem?.image_url || undefined} alt="Photo preview" className="mt-3 h-24 w-full rounded-xl object-contain" />}
               </label>
               {itemError && <p role="alert" className="sm:col-span-2 rounded-xl bg-[#FFF2BA] px-4 py-3 text-sm text-[#845D3E]">{itemError}</p>}
               <div className="mt-2 flex justify-end gap-3 sm:col-span-2">
