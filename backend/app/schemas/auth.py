@@ -12,6 +12,13 @@ class UserRegister(BaseModel):
     birth_date: date
     terms_accepted: bool
 
+    @field_validator('terms_accepted')
+    @classmethod
+    def validate_terms_accepted(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError('Terms must be accepted')
+        return value
+
     @field_validator('password')
     @classmethod
     def password_complexity(cls, password: str) -> str:

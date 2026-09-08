@@ -3,7 +3,6 @@ import asyncio
 from fastapi import APIRouter, status, Depends, HTTPException, File, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.status import HTTP_417_EXPECTATION_FAILED
 
 from app.core.database import get_db
 from app.models import ClothingItem, User
