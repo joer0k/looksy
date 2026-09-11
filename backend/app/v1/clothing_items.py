@@ -157,7 +157,7 @@ async def upload_item_image(item_id: int,
         raise HTTPException(status_code=400, detail="Empty file")
 
     if len(content) > MAX_IMAGE_SIZE:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+        raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                             detail="Image too large",)
 
     object_key = await asyncio.to_thread(upload_image,
