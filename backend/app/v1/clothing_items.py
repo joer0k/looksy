@@ -49,13 +49,19 @@ async def create_item(data: ClothingItemCreate,
 
 @router.get("/", response_model=list[ClothingItemResponse], status_code=status.HTTP_200_OK)
 async def get_user_items(current_user: User = Depends(get_current_active_user),
-                         db: AsyncSession = Depends(get_db)
+                         db: AsyncSession = Depends(get_db),
+                         category: str | None = None,
                          ) -> list[ClothingItemResponse]:
-    result = await db.scalars(
-        select(ClothingItem)
-        .where(ClothingItem.user_id == current_user.id)
-        .order_by(ClothingItem.created_at.desc())
+
+    query = select(ClothingItem).where(
+        ClothingItem.user_id == current_user.id
     )
+
+    if category is not None:
+        query = query.where(ClothingItem.category == category)
+
+    query = query.order_by(ClothingItem.created_at.desc())
+    result = await db.scalars(query)
 
     return [to_item_response(item) for item in result.all()]
 

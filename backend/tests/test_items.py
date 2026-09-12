@@ -1,3 +1,4 @@
+import email
 from unittest.mock import AsyncMock, MagicMock
 from datetime import date, datetime, timezone
 from weakref import ref
@@ -434,3 +435,51 @@ async def test_delete_item_not_found(client: AsyncClient):
 
     db.delete.assert_not_awaited()
     db.commit.assert_not_awaited()
+
+@pytest.mark.asyncio
+async def test_get_items_with_category(client: AsyncClient):
+    user = User(
+        email="user@example.com",
+        password_hash="not-a-real-hash",
+        birth_date=date(2000, 1, 1),
+        is_active=True,
+    )
+    user.id = 1
+
+    item = ClothingItem(
+        id=1,
+        name="White shirt",
+        category="Tops",
+        color="White",
+        season="Summer",
+        image_key=None,
+        user_id=1,
+    )
+    item.id = 1
+    item.created_at = datetime.now(timezone.utc)
+    item.updated_at = datetime.now(timezone.utc)
+
+    db = AsyncMock(spec=AsyncSession)
+
+    items_result = MagicMock()
+    items_result.all.return_value = [item]
+    db.scalars.return_value = items_result
+
+    override_active_user(user)
+    override_database(db)
+    
+    response = await client.get("/items/", params={"category": "Tops"})
+
+    assert response.status_code == 200
+    response_data = response.json()
+
+    assert len(response_data) == 1
+    assert response_data[0]["id"] == 1
+    assert response_data[0]["name"] == "White shirt"
+    assert response_data[0]["category"] == "Tops"
+    assert response_data[0]["color"] == "White"
+    assert response_data[0]["season"] == "Summer"
+    assert response_data[0]["user_id"] == 1
+
+    query_parameters = db.scalars.await_args.args[0].compile().params
+    assert "Tops" in query_parameters.values()
