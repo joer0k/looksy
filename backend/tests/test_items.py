@@ -1,7 +1,5 @@
-import email
 from unittest.mock import AsyncMock, MagicMock
 from datetime import date, datetime, timezone
-from weakref import ref
 
 import pytest
 from httpx import AsyncClient
@@ -483,3 +481,109 @@ async def test_get_items_with_category(client: AsyncClient):
 
     query_parameters = db.scalars.await_args.args[0].compile().params
     assert "Tops" in query_parameters.values()
+
+
+@pytest.mark.asyncio
+async def test_get_items_without_category(client: AsyncClient):
+    user = User(
+        email="user@example.com",
+        password_hash="not-a-real-hash",
+        birth_date=date(2000, 1, 1),
+        is_active=True,
+    )
+    user.id = 1
+
+    shirt = ClothingItem(
+        name="White shirt",
+        category="Tops",
+        color="White",
+        season="Summer",
+        image_key=None,
+        user_id=1,
+    )
+    shirt.id = 10
+    shirt.created_at = datetime.now(timezone.utc)
+    shirt.updated_at = datetime.now(timezone.utc)
+
+    jeans = ClothingItem(
+        name="Blue jeans",
+        category="Bottoms",
+        color="Blue",
+        season="Summer",
+        image_key=None,
+        user_id=1,
+    )
+    jeans.id = 11
+    jeans.created_at = datetime.now(timezone.utc)
+    jeans.updated_at = datetime.now(timezone.utc)
+
+    db = AsyncMock(spec=AsyncSession)
+
+    items_result = MagicMock()
+    items_result.all.return_value = [shirt, jeans]
+    db.scalars.return_value = items_result
+
+    override_active_user(user)
+    override_database(db)
+
+    response = await client.get("/items/")
+    assert response.status_code == 200
+
+    response_data = response.json()
+    assert len(response_data) == 2
+    assert response_data[0]["name"] == "White shirt"
+    assert response_data[1]["name"] == "Blue jeans"
+
+@pytest.mark.asyncio
+async def test_get_items_with_fake_category(client: AsyncClient):
+    user = User(
+        email="user@example.com",
+        password_hash="not-a-real-hash",
+        birth_date=date(2000, 1, 1),
+        is_active=True,
+    )
+    user.id = 1
+
+    db = AsyncMock(spec=AsyncSession)
+
+    items_result = MagicMock()
+    items_result.all.return_value = []
+    db.scalars.return_value = items_result
+
+    override_active_user(user)
+    override_database(db)
+
+    response = await client.get("/items/", params={"category": "fake category"})
+    assert response.status_code == 200
+    assert response.json() == []
+
+    query_parameters = db.scalars.await_args.args[0].compile().params
+    assert "fake category" in query_parameters.values()
+
+@pytest.mark.asyncio
+async def test_get_items_query_filters_by_current_user(client: AsyncClient):
+    user = User(
+        email="user@example.com",
+        password_hash="not-a-real-hash",
+        birth_date=date(2000, 1, 1),
+        is_active=True,
+    )
+    user.id = 67
+
+    db = AsyncMock(spec=AsyncSession)
+    items_result = MagicMock()
+    items_result.all.return_value = []
+    db.scalars.return_value = items_result
+
+    override_active_user(user)
+    override_database(db)
+
+    response = await client.get("/items/")
+    assert response.status_code == 200
+    assert response.json() == []
+
+    query = db.scalars.await_args.args[0]
+    compiled_query = query.compile(compile_kwargs={"literal_binds": True})
+    sql = str(compiled_query)
+    
+    assert f"clothingitems.user_id = {user.id}" in sql
