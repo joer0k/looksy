@@ -1,128 +1,83 @@
 "use client"
 
 import * as React from "react"
+import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
+import { XIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { XIcon } from "lucide-react"
 
-function Dialog({ ...props }: DialogPrimitive.Root.Props) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
-}
+const Dialog = DialogPrimitive.Root
+const DialogClose = DialogPrimitive.Close
+const AlertDialog = AlertDialogPrimitive.Root
+const AlertDialogClose = AlertDialogPrimitive.Close
 
-function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
-  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
-}
+const backdropClassName =
+  "fixed inset-0 z-50 bg-scrim transition-opacity duration-200 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0"
 
-function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
-}
-
-function DialogClose({ ...props }: DialogPrimitive.Close.Props) {
-  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
-}
-
-function DialogOverlay({
-  className,
-  ...props
-}: DialogPrimitive.Backdrop.Props) {
+/**
+ * Large dialog for forms. On phones it becomes a near full-height sheet so
+ * fields and the keyboard have room; from `sm` up it is a centred panel.
+ */
+function DialogContent({ className, children, ...props }: DialogPrimitive.Popup.Props) {
   return (
-    <DialogPrimitive.Backdrop
-      data-slot="dialog-overlay"
-      className={cn(
-        "fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
-function DialogContent({
-  className,
-  children,
-  showCloseButton = true,
-  ...props
-}: DialogPrimitive.Popup.Props & {
-  showCloseButton?: boolean
-}) {
-  return (
-    <DialogPortal>
-      <DialogOverlay />
+    <DialogPrimitive.Portal>
+      <DialogPrimitive.Backdrop className={backdropClassName} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed inset-x-0 top-3 bottom-0 z-50 flex flex-col overflow-hidden rounded-t-panel bg-surface text-ink shadow-overlay outline-none",
+          "transition-[opacity,translate,scale] duration-200 ease-out data-[ending-style]:opacity-0 data-[starting-style]:opacity-0",
+          "max-sm:data-[ending-style]:translate-y-8 max-sm:data-[starting-style]:translate-y-8",
+          "sm:inset-auto sm:top-1/2 sm:left-1/2 sm:max-h-[min(100dvh-4rem,50rem)] sm:w-[min(100vw-3rem,52rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-panel",
+          "sm:data-[ending-style]:scale-[0.98] sm:data-[starting-style]:scale-[0.98]",
           className
         )}
         {...props}
       >
         {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close
-            data-slot="dialog-close"
-            render={
-              <Button
-                variant="ghost"
-                className="absolute top-2 right-2"
-                size="icon-sm"
-              />
-            }
-          >
-            <XIcon
-            />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
-        )}
       </DialogPrimitive.Popup>
-    </DialogPortal>
+    </DialogPrimitive.Portal>
   )
 }
 
-function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="dialog-header"
-      className={cn("flex flex-col gap-2", className)}
-      {...props}
-    />
-  )
-}
-
-function DialogFooter({
-  className,
-  showCloseButton = false,
-  children,
-  ...props
-}: React.ComponentProps<"div"> & {
-  showCloseButton?: boolean
+function DialogHeader({
+  title,
+  description,
+  closeLabel,
+}: {
+  title: React.ReactNode
+  description?: React.ReactNode
+  closeLabel: string
 }) {
   return (
-    <div
-      data-slot="dialog-footer"
-      className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
-        className
-      )}
-      {...props}
-    >
-      {children}
-      {showCloseButton && (
-        <DialogPrimitive.Close render={<Button variant="outline" />}>
-          Close
-        </DialogPrimitive.Close>
-      )}
+    <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4 sm:px-7 sm:py-5">
+      <div className="min-w-0 space-y-1">
+        <DialogPrimitive.Title className="font-display text-display-sm font-medium">{title}</DialogPrimitive.Title>
+        {description && (
+          <DialogPrimitive.Description className="text-sm text-ink-muted">{description}</DialogPrimitive.Description>
+        )}
+      </div>
+      <DialogPrimitive.Close
+        aria-label={closeLabel}
+        render={<Button variant="ghost" size="icon-sm" className="-mr-2 shrink-0" />}
+      >
+        <XIcon aria-hidden="true" className="size-5" />
+      </DialogPrimitive.Close>
     </div>
   )
 }
 
-function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
+function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
+  return <div className={cn("min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7 sm:py-6", className)} {...props} />
+}
+
+function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <DialogPrimitive.Title
-      data-slot="dialog-title"
+    <div
       className={cn(
-        "font-heading text-base leading-none font-medium",
+        "flex justify-end gap-2 border-t border-line bg-surface px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-7 sm:pb-4",
         className
       )}
       {...props}
@@ -130,31 +85,43 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   )
 }
 
-function DialogDescription({
+/** Small centred dialog for confirmations such as deleting an item. */
+function AlertDialogContent({
+  title,
+  description,
+  children,
   className,
   ...props
-}: DialogPrimitive.Description.Props) {
+}: AlertDialogPrimitive.Popup.Props & { title: React.ReactNode; description: React.ReactNode }) {
   return (
-    <DialogPrimitive.Description
-      data-slot="dialog-description"
-      className={cn(
-        "text-sm text-muted-foreground *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",
-        className
-      )}
-      {...props}
-    />
+    <AlertDialogPrimitive.Portal>
+      <AlertDialogPrimitive.Backdrop className={backdropClassName} />
+      <AlertDialogPrimitive.Popup
+        className={cn(
+          "fixed top-1/2 left-1/2 z-50 w-[min(100vw-2rem,27rem)] -translate-x-1/2 -translate-y-1/2 rounded-panel bg-surface p-6 text-ink shadow-overlay outline-none",
+          "transition-[opacity,scale] duration-200 ease-out data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0",
+          className
+        )}
+        {...props}
+      >
+        <AlertDialogPrimitive.Title className="font-display text-display-sm font-medium">{title}</AlertDialogPrimitive.Title>
+        <AlertDialogPrimitive.Description className="mt-2 text-[0.9375rem] leading-relaxed text-ink-muted [overflow-wrap:anywhere]">
+          {description}
+        </AlertDialogPrimitive.Description>
+        {children}
+      </AlertDialogPrimitive.Popup>
+    </AlertDialogPrimitive.Portal>
   )
 }
 
 export {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogContent,
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogOverlay,
-  DialogPortal,
-  DialogTitle,
-  DialogTrigger,
 }
